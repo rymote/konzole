@@ -48,15 +48,20 @@ public class ConsoleFormatter : FormatterBase
         
         if (entry.Properties?.Count > 0)
         {
-            stringBuilder.AppendLine();
+            stringBuilder.Append(" (");
+            bool isFirst = true;
             foreach (KeyValuePair<string, object?> property in entry.Properties)
             {
-                stringBuilder.Append("    ");
+                if (!isFirst)
+                {
+                    stringBuilder.Append(", ");
+                }
                 stringBuilder.Append(property.Key);
                 stringBuilder.Append(": ");
                 stringBuilder.Append(property.Value?.ToString() ?? "null");
-                stringBuilder.AppendLine();
+                isFirst = false;
             }
+            stringBuilder.Append(')');
         }
         
         AppendException(stringBuilder, entry);

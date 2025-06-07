@@ -44,7 +44,11 @@ public class ConsoleSink : SinkBase<ConsoleSinkOptions>
                     }
                     
                     string formattedMessage = Formatter.Format(entry);
-                    Console.WriteLine(formattedMessage);
+                    
+                    if (entry.Level is KonzoleLogLevel.Error or KonzoleLogLevel.Fatal)
+                        Console.Error.WriteLine(formattedMessage);
+                    else
+                        Console.WriteLine(formattedMessage);
                 }
                 finally
                 {
