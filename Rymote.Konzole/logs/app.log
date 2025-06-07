@@ -1,0 +1,21 @@
+{
+  "timestamp": "2025-06-07 09:01:39.277",
+  "level": "Success",
+  "message": "Multiple sinks configured successfully!",
+  "category": "Program",
+  "properties": {}
+}
+{
+  "timestamp": "2025-06-07 09:06:33.301",
+  "level": "Success",
+  "message": "Multiple sinks configured successfully!",
+  "category": "Program",
+  "properties": {}
+}
+{
+  "timestamp": "2025-06-07 09:08:26.196",
+  "level": "Success",
+  "message": "Multiple sinks configured successfully!",
+  "category": "Program",
+  "properties": {}
+}
