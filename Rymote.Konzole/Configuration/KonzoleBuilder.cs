@@ -51,6 +51,34 @@ public class KonzoleBuilder
         return this;
     }
     
+    public KonzoleBuilder AddDiscordSink(string webhookUrl, Action<DiscordSinkOptions>? configure = null)
+    {
+        DiscordSinkOptions discordSinkOptions = new DiscordSinkOptions();
+    
+        discordSinkOptions.WebhookUrl = webhookUrl;
+    
+        configure?.Invoke(discordSinkOptions);
+    
+        _sinks.Add(new DiscordSink(discordSinkOptions));
+        return this;
+    }
+
+    public KonzoleBuilder AddSlackSink(string webhookUrl, string? channel = null, Action<SlackSinkOptions>? configure = null)
+    {
+        SlackSinkOptions slackSinkOptions = new SlackSinkOptions();
+    
+        slackSinkOptions.WebhookUrl = webhookUrl;
+        if (!string.IsNullOrEmpty(channel))
+        {
+            slackSinkOptions.Channel = channel;
+        }
+    
+        configure?.Invoke(slackSinkOptions);
+    
+        _sinks.Add(new SlackSink(slackSinkOptions));
+        return this;
+    }
+    
     public KonzoleBuilder AddSink(ISink sink)
     {
         _sinks.Add(sink);

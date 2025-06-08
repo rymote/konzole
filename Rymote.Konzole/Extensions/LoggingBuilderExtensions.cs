@@ -47,24 +47,17 @@ public static class LoggingBuilderExtensions
         );
     }
     
-    public static ILoggingBuilder AddKonzoleAll(this ILoggingBuilder builder, 
-        string? filePath = null, 
-        string? remoteEndpoint = null, 
-        string? remoteApiKey = null)
+    public static ILoggingBuilder AddKonzoleDiscord(this ILoggingBuilder builder, string webhookUrl)
     {
-        return builder.AddKonzole(konzoleBuilder =>
-        {
-            konzoleBuilder.AddConsoleSink();
-            
-            if (!string.IsNullOrEmpty(filePath))
-            {
-                konzoleBuilder.AddFileSink(filePath);
-            }
-            
-            if (!string.IsNullOrEmpty(remoteEndpoint))
-            {
-                konzoleBuilder.AddRemoteSink(remoteEndpoint, remoteApiKey);
-            }
-        });
+        return builder.AddKonzole(konzoleBuilder => 
+            konzoleBuilder.AddDiscordSink(webhookUrl)
+        );
+    }
+
+    public static ILoggingBuilder AddKonzoleSlack(this ILoggingBuilder builder, string webhookUrl, string? channel = null)
+    {
+        return builder.AddKonzole(konzoleBuilder => 
+            konzoleBuilder.AddSlackSink(webhookUrl, channel)
+        );
     }
 } 
