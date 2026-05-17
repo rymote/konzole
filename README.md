@@ -150,15 +150,6 @@ KonzoleDiagnostics.SinkError += (sender, eventArgs) =>
 };
 ```
 
-## Migrating from 0.1.x
-
-- `KonzoleLogLevel` removed. Use `Microsoft.Extensions.Logging.LogLevel` for severity and `Rymote.Konzole.Models.KonzoleTag` for visual tagging.
-- `LogEntry.Level` is now `LogLevel`; `LogEntry.Timestamp` is now `DateTimeOffset`; `Color` is gone; `Tag` is added.
-- `ILogFormatter.Format(LogEntry)` → `ILogFormatter.Format(LogEntry, FormatterContext)`.
-- `ISink.WriteAsync(LogEntry)` → `ISink.TryEnqueue(LogEntry)` (non-blocking); `FlushAsync` takes `CancellationToken`.
-- Removed extension methods: `AddKonzoleStdout`, `AddKonzoleFile`, `AddKonzoleRemote`, `AddKonzoleDiscord`, `AddKonzoleSlack` — use `AddKonzole(builder => builder.Add…Sink(...))`.
-- Removed: `LogSuccessWithData<T>`, `LogErrorWithData<T>` (Serilog `{@Data}` syntax, never worked under MEL).
-
 ## License
 
 MIT
