@@ -1,15 +1,14 @@
-using Microsoft.Extensions.Logging;
-using Rymote.Konzole.Formatters;
+using Rymote.Konzole.Sinks.Http;
 
 namespace Rymote.Konzole.Configuration;
 
-public class RemoteSinkOptions : SinkOptionsBase
+public sealed class RemoteSinkOptions : HttpSinkOptionsBase
 {
     public string? RemoteEndpoint { get; set; }
-    
     public string? RemoteApiKey { get; set; }
-    
-    public int RemoteBatchSize { get; set; } = 100;
-    
-    public TimeSpan RemoteFlushInterval { get; set; } = TimeSpan.FromSeconds(5);
-} 
+
+    public RemoteSinkOptions()
+    {
+        HttpClientName = "Konzole.Remote";
+    }
+}

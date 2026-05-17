@@ -1,37 +1,43 @@
-﻿using Rymote.Konzole.Models;
+using Rymote.Konzole.Models;
+using Rymote.Konzole.Sinks.Http;
 
 namespace Rymote.Konzole.Configuration;
 
-public class SlackSinkOptions : SinkOptionsBase
+public sealed class SlackSinkOptions : HttpSinkOptionsBase
 {
     public string? WebhookUrl { get; set; }
-    
     public string? Channel { get; set; }
-    
     public string? Username { get; set; } = "Konzole Logger";
-    
     public string? IconEmoji { get; set; } = ":robot_face:";
-    
     public string? IconUrl { get; set; }
-    
     public bool UseAttachments { get; set; } = true;
-    
-    public int MaxMessageLength { get; set; } = 3000;
-    
-    public Dictionary<KonzoleLogLevel, string> AttachmentColors { get; set; } = new()
+
+    public IReadOnlyDictionary<KonzoleTag, string> TagAttachmentColors { get; init; } = new Dictionary<KonzoleTag, string>
     {
-        { KonzoleLogLevel.Trace, "#808080" },
-        { KonzoleLogLevel.Debug, "#9B9B9B" },
-        { KonzoleLogLevel.Information, "#00D4FF" },
-        { KonzoleLogLevel.Success, "#00FF00" },
-        { KonzoleLogLevel.Warning, "#FFFF00" },
-        { KonzoleLogLevel.Error, "#FF0000" },
-        { KonzoleLogLevel.Fatal, "#8B0000" },
-        { KonzoleLogLevel.Pending, "#0000FF" },
-        { KonzoleLogLevel.Complete, "#008000" },
-        { KonzoleLogLevel.Note, "#FF00FF" },
-        { KonzoleLogLevel.Start, "#00CED1" },
-        { KonzoleLogLevel.Pause, "#FFD700" },
-        { KonzoleLogLevel.Watch, "#8B008B" }
+        [KonzoleTag.Success]  = "#00FF00",
+        [KonzoleTag.Pending]  = "#0000FF",
+        [KonzoleTag.Complete] = "#008000",
+        [KonzoleTag.Note]     = "#FF00FF",
+        [KonzoleTag.Start]    = "#00CED1",
+        [KonzoleTag.Pause]    = "#FFD700",
+        [KonzoleTag.Watch]    = "#8B008B"
     };
+
+    public IReadOnlyDictionary<Microsoft.Extensions.Logging.LogLevel, string> LevelAttachmentColors { get; init; }
+        = new Dictionary<Microsoft.Extensions.Logging.LogLevel, string>
+    {
+        [Microsoft.Extensions.Logging.LogLevel.Trace]       = "#808080",
+        [Microsoft.Extensions.Logging.LogLevel.Debug]       = "#9B9B9B",
+        [Microsoft.Extensions.Logging.LogLevel.Information] = "#00D4FF",
+        [Microsoft.Extensions.Logging.LogLevel.Warning]     = "#FFFF00",
+        [Microsoft.Extensions.Logging.LogLevel.Error]       = "#FF0000",
+        [Microsoft.Extensions.Logging.LogLevel.Critical]    = "#8B0000"
+    };
+
+    public SlackSinkOptions()
+    {
+        HttpClientName = "Konzole.Slack";
+        BatchSize = 1;
+        MaxMessageLength = 3000;
+    }
 }

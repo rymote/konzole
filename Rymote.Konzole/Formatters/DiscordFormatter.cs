@@ -1,39 +1,40 @@
-﻿using System.Text;
-using Rymote.Konzole.Configuration;
+using System.Text;
 using Rymote.Konzole.Models;
 
 namespace Rymote.Konzole.Formatters;
 
-public class DiscordFormatter : FormatterBase
+public sealed class DiscordFormatter : ILogFormatter
 {
-    public DiscordFormatter(SinkOptionsBase options) : base(options) {}
-    
-    public override string Format(LogEntry entry)
+    public string Format(LogEntry entry, FormatterContext context)
     {
-        StringBuilder stringBuilder = new StringBuilder();
-        
-        stringBuilder.Append(LogIcon.GetIcon(entry.Level));
+        StringBuilder stringBuilder = new();
+
+        string icon = entry.Tag.HasValue
+            ? LogIcon.GetIcon(entry.Tag.Value)
+            : LogIcon.GetIcon(entry.Level);
+        stringBuilder.Append(icon);
+
         stringBuilder.Append(" **");
-        stringBuilder.Append(entry.Level);
+        stringBuilder.Append(entry.Tag?.ToString() ?? entry.Level.ToString());
         stringBuilder.Append("**");
-        
-        if (Options.ShowTimestamp)
+
+        if (context.ShowTimestamp)
         {
             stringBuilder.Append(" `");
-            stringBuilder.Append(entry.Timestamp.ToString(Options.TimestampFormat));
-            stringBuilder.Append("`");
+            stringBuilder.Append(entry.Timestamp.ToString(context.TimestampFormat));
+            stringBuilder.Append('`');
         }
-        
-        if (Options.ShowCategory && !string.IsNullOrEmpty(entry.Category))
+
+        if (context.ShowCategory && !string.IsNullOrEmpty(entry.Category))
         {
             stringBuilder.Append(" [");
             stringBuilder.Append(entry.Category);
-            stringBuilder.Append("]");
+            stringBuilder.Append(']');
         }
-        
+
         stringBuilder.AppendLine();
-        stringBuilder.Append(entry.Message);
-        
+        stringBuilder.Append(FormatterHelpers.TruncateMessage(entry.Message, context.MaxMessageLength));
+
         return stringBuilder.ToString();
     }
 }

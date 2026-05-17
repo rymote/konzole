@@ -5,35 +5,39 @@ using Rymote.Konzole.Sinks;
 namespace Rymote.Konzole;
 
 [ProviderAlias("Konzole")]
-public class KonzoleLoggerProvider : ILoggerProvider
+public sealed class KonzoleLoggerProvider : ILoggerProvider, IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, KonzoleLogger> _loggers = new();
-    private readonly List<ISink> _sinks;
-    
+    private readonly IReadOnlyList<ISink> _sinks;
+    private int _disposed;
+
     public KonzoleLoggerProvider(IEnumerable<ISink> sinks)
     {
-        _sinks = sinks?.ToList() ?? throw new ArgumentNullException(nameof(sinks));
-        
-        if (!_sinks.Any())
-        {
+        ArgumentNullException.ThrowIfNull(sinks);
+        _sinks = sinks.ToArray();
+        if (_sinks.Count == 0)
             throw new ArgumentException("At least one sink must be provided.", nameof(sinks));
-        }
     }
-    
-    public ILogger CreateLogger(string categoryName)
+
+    public ILogger CreateLogger(string categoryName) =>
+        _loggers.GetOrAdd(categoryName, name => new KonzoleLogger(name, _sinks));
+
+    public async ValueTask DisposeAsync()
     {
-        return _loggers.GetOrAdd(categoryName, name => new KonzoleLogger(name, _sinks));
-    }
-    
-    public void Dispose()
-    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+
         foreach (ISink sink in _sinks)
         {
-            sink.FlushAsync().Wait();
-            sink.Dispose();
+            try { await sink.FlushAsync(CancellationToken.None); } catch { }
         }
-        
-        _sinks.Clear();
+
+        foreach (ISink sink in _sinks)
+        {
+            try { await sink.DisposeAsync(); } catch { }
+        }
+
         _loggers.Clear();
     }
-} 
+
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+}

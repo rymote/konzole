@@ -4,5 +4,5 @@ namespace Rymote.Konzole.Formatters;
 
 public interface ILogFormatter
 {
-    string Format(LogEntry entry);
-} 
+    string Format(LogEntry entry, FormatterContext context);
+}

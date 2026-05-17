@@ -1,40 +1,52 @@
+using Microsoft.Extensions.Logging;
+
 namespace Rymote.Konzole.Models;
 
 public static class LogIcon
 {
-    public static string GetIcon(KonzoleLogLevel level) => level switch
+    public static string GetIcon(LogLevel logLevel) => logLevel switch
     {
-        KonzoleLogLevel.Trace => "🔍",
-        KonzoleLogLevel.Debug => "🐛",
-        KonzoleLogLevel.Information => "ℹ️",
-        KonzoleLogLevel.Success => "✅",
-        KonzoleLogLevel.Warning => "⚠️",
-        KonzoleLogLevel.Error => "❌",
-        KonzoleLogLevel.Fatal => "💀",
-        KonzoleLogLevel.Pending => "⏳",
-        KonzoleLogLevel.Complete => "✔️",
-        KonzoleLogLevel.Note => "📝",
-        KonzoleLogLevel.Start => "🚀",
-        KonzoleLogLevel.Pause => "⏸️",
-        KonzoleLogLevel.Watch => "👁️",
-        _ => "•"
+        LogLevel.Trace       => "🔍",
+        LogLevel.Debug       => "🐛",
+        LogLevel.Information => "ℹ️",
+        LogLevel.Warning     => "⚠️",
+        LogLevel.Error       => "❌",
+        LogLevel.Critical    => "💀",
+        _                    => "•"
     };
 
-    public static string GetFallbackIcon(KonzoleLogLevel level) => level switch
+    public static string GetIcon(KonzoleTag tag) => tag switch
     {
-        KonzoleLogLevel.Trace => "[TRACE]",
-        KonzoleLogLevel.Debug => "[DEBUG]",
-        KonzoleLogLevel.Information => "[INFO]",
-        KonzoleLogLevel.Success => "[SUCCESS]",
-        KonzoleLogLevel.Warning => "[WARN]",
-        KonzoleLogLevel.Error => "[ERROR]",
-        KonzoleLogLevel.Fatal => "[FATAL]",
-        KonzoleLogLevel.Pending => "[PENDING]",
-        KonzoleLogLevel.Complete => "[DONE]",
-        KonzoleLogLevel.Note => "[NOTE]",
-        KonzoleLogLevel.Start => "[START]",
-        KonzoleLogLevel.Pause => "[PAUSE]",
-        KonzoleLogLevel.Watch => "[WATCH]",
-        _ => "[LOG]"
+        KonzoleTag.Success  => "✅",
+        KonzoleTag.Pending  => "⏳",
+        KonzoleTag.Complete => "✔️",
+        KonzoleTag.Note     => "📝",
+        KonzoleTag.Start    => "🚀",
+        KonzoleTag.Pause    => "⏸️",
+        KonzoleTag.Watch    => "👁️",
+        _                   => "•"
     };
-} 
+
+    public static string GetFallbackIcon(LogLevel logLevel) => logLevel switch
+    {
+        LogLevel.Trace       => "[TRACE]",
+        LogLevel.Debug       => "[DEBUG]",
+        LogLevel.Information => "[INFO]",
+        LogLevel.Warning     => "[WARN]",
+        LogLevel.Error       => "[ERROR]",
+        LogLevel.Critical    => "[FATAL]",
+        _                    => "[LOG]"
+    };
+
+    public static string GetFallbackIcon(KonzoleTag tag) => tag switch
+    {
+        KonzoleTag.Success  => "[SUCCESS]",
+        KonzoleTag.Pending  => "[PENDING]",
+        KonzoleTag.Complete => "[DONE]",
+        KonzoleTag.Note     => "[NOTE]",
+        KonzoleTag.Start    => "[START]",
+        KonzoleTag.Pause    => "[PAUSE]",
+        KonzoleTag.Watch    => "[WATCH]",
+        _                   => "[LOG]"
+    };
+}

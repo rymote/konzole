@@ -1,130 +1,54 @@
-﻿using System.Text;
+using System.Net.Http;
+using System.Text;
 using System.Text.Json;
 using Rymote.Konzole.Configuration;
 using Rymote.Konzole.Formatters;
 using Rymote.Konzole.Models;
+using Rymote.Konzole.Sinks.Http;
 
 namespace Rymote.Konzole.Sinks;
 
-public class DiscordSink : SinkBase<DiscordSinkOptions>
+public sealed class DiscordSink : HttpSinkBase<DiscordSinkOptions>
 {
-    private readonly HttpClient _httpClient;
-    private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
-    
-    public override string Name => "Discord";
-    
-    public DiscordSink(DiscordSinkOptions options, HttpClient? httpClient = null) : base(options)
+    public DiscordSink(DiscordSinkOptions options, System.Net.Http.IHttpClientFactory httpClientFactory)
+        : base(options, httpClientFactory.CreateClient(options.HttpClientName))
     {
-        _httpClient = httpClient ?? new HttpClient();
-        
         if (string.IsNullOrEmpty(options.WebhookUrl))
-        {
-            throw new ArgumentException("Discord webhook URL is required", nameof(options));
-        }
+            throw new ArgumentException("Discord webhook URL is required.", nameof(options));
     }
-    
-    public override async Task WriteAsync(LogEntry entry)
+
+    public override string Name => "Discord";
+
+    protected override ILogFormatter CreateDefaultFormatter() => new DiscordFormatter();
+
+    protected override HttpRequestMessage BuildRequest(IReadOnlyList<LogEntry> batch)
     {
-        if (!ShouldLog(entry))
-            return;
-            
-        await _semaphoreSlim.WaitAsync();
-        try
+        LogEntry entry = batch[0];
+        object payload = Options.UseEmbeds ? BuildEmbedPayload(entry) : BuildPlainPayload(entry);
+        string jsonPayload = JsonSerializer.Serialize(payload);
+        return new HttpRequestMessage(HttpMethod.Post, Options.WebhookUrl)
         {
-            object payload;
-            
-            if (Options.UseEmbeds)
-            {
-                payload = CreateEmbedPayload(entry);
-            }
-            else
-            {
-                payload = CreateSimplePayload(entry);
-            }
-            
-            string jsonContent = JsonSerializer.Serialize(payload);
-            StringContent httpContent = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-            
-            HttpResponseMessage response = await _httpClient.PostAsync(Options.WebhookUrl, httpContent);
-            
-            if (!response.IsSuccessStatusCode)
-            {
-                Console.Error.WriteLine($"Failed to send log to Discord: {response.StatusCode}");
-            }
-        }
-        catch (Exception exception)
-        {
-            Console.Error.WriteLine($"Error sending log to Discord: {exception.Message}");
-        }
-        finally
-        {
-            _semaphoreSlim.Release();
-        }
+            Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+        };
     }
-    
-    protected override ILogFormatter CreateDefaultFormatter()
+
+    private object BuildPlainPayload(LogEntry entry) => new
     {
-        return new DiscordFormatter(Options);
-    }
-    
-    private object CreateEmbedPayload(LogEntry entry)
+        username = Options.Username,
+        avatar_url = Options.AvatarUrl,
+        content = FormatterHelpers.TruncateMessage(Formatter.Format(entry, FormatterContext), Options.MaxMessageLength)
+    };
+
+    private object BuildEmbedPayload(LogEntry entry)
     {
-        List<object> fields = new List<object>();
-        
-        if (Options.ShowCategory && !string.IsNullOrEmpty(entry.Category))
-        {
-            fields.Add(new { name = "Category", value = entry.Category, inline = true });
-        }
-        
-        if (Options.ShowEventId && entry.EventId.HasValue)
-        {
-            string eventValue = entry.EventId.Value.ToString();
-            if (!string.IsNullOrEmpty(entry.EventName))
-            {
-                eventValue += $" ({entry.EventName})";
-            }
-            fields.Add(new { name = "Event", value = eventValue, inline = true });
-        }
-        
-        if (Options.ShowScope && !string.IsNullOrEmpty(entry.Scope))
-        {
-            fields.Add(new { name = "Scope", value = entry.Scope, inline = true });
-        }
-        
-        if (entry.Properties?.Count > 0)
-        {
-            foreach (KeyValuePair<string, object?> property in entry.Properties)
-            {
-                fields.Add(new { name = property.Key, value = property.Value?.ToString() ?? "null", inline = true });
-            }
-        }
-        
-        if (Options.ShowException && entry.Exception != null)
-        {
-            string exceptionText = $"**{entry.Exception.GetType().Name}**: {entry.Exception.Message}";
-            if (exceptionText.Length > 1024)
-            {
-                exceptionText = exceptionText.Substring(0, 1021) + "...";
-            }
-            fields.Add(new { name = "Exception", value = exceptionText, inline = false });
-            
-            if (!string.IsNullOrEmpty(entry.Exception.StackTrace))
-            {
-                string stackTrace = entry.Exception.StackTrace;
-                if (stackTrace.Length > 1024)
-                {
-                    stackTrace = stackTrace.Substring(0, 1021) + "...";
-                }
-                fields.Add(new { name = "Stack Trace", value = $"```\n{stackTrace}\n```", inline = false });
-            }
-        }
-        
-        string description = entry.Message;
-        if (description.Length > Options.MaxMessageLength)
-        {
-            description = description.Substring(0, Options.MaxMessageLength - 3) + "...";
-        }
-        
+        int embedColor = entry.Tag.HasValue
+            ? Options.TagEmbedColors.GetValueOrDefault(entry.Tag.Value, 0x808080)
+            : Options.LevelEmbedColors.GetValueOrDefault(entry.Level, 0x808080);
+
+        string title = entry.Tag.HasValue
+            ? $"{LogIcon.GetIcon(entry.Tag.Value)} {entry.Tag.Value}"
+            : $"{LogIcon.GetIcon(entry.Level)} {entry.Level}";
+
         return new
         {
             username = Options.Username,
@@ -133,40 +57,13 @@ public class DiscordSink : SinkBase<DiscordSinkOptions>
             {
                 new
                 {
-                    title = $"{LogIcon.GetIcon(entry.Level)} {entry.Level}",
-                    description = description,
-                    color = Options.EmbedColors.GetValueOrDefault(entry.Level, 0x808080),
-                    fields = fields,
+                    title,
+                    description = FormatterHelpers.TruncateMessage(entry.Message, Options.MaxMessageLength),
+                    color = embedColor,
                     timestamp = entry.Timestamp.ToString("yyyy-MM-dd'T'HH:mm:ss.fffK"),
-                    footer = new
-                    {
-                        text = Environment.MachineName
-                    }
+                    footer = new { text = Environment.MachineName }
                 }
             }
         };
-    }
-    
-    private object CreateSimplePayload(LogEntry entry)
-    {
-        string message = Formatter.Format(entry);
-        if (message.Length > Options.MaxMessageLength)
-        {
-            message = message.Substring(0, Options.MaxMessageLength - 3) + "...";
-        }
-        
-        return new
-        {
-            username = Options.Username,
-            avatar_url = Options.AvatarUrl,
-            content = message
-        };
-    }
-    
-    public override void Dispose()
-    {
-        base.Dispose();
-        _httpClient?.Dispose();
-        _semaphoreSlim?.Dispose();
     }
 }

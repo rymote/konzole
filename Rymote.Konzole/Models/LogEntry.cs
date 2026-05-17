@@ -1,31 +1,22 @@
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
 
 namespace Rymote.Konzole.Models;
 
-public class LogEntry
+public sealed record LogEntry
 {
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-    
-    public KonzoleLogLevel Level { get; set; }
-    
-    public string Message { get; set; } = string.Empty;
-    
-    public string? Category { get; set; }
-    
-    public int? EventId { get; set; }
-    
-    public string? EventName { get; set; }
-    
-    public Exception? Exception { get; set; }
-    
-    public Dictionary<string, object?>? Properties { get; set; }
-    
-    public string? Scope { get; set; }
-    
+    public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
+    public LogLevel Level { get; init; }
+    public KonzoleTag? Tag { get; init; }
+    public string Message { get; init; } = string.Empty;
+    public string? Category { get; init; }
+    public EventId EventId { get; init; }
+
     [JsonIgnore]
-    public ConsoleColor? Color { get; set; }
-    
-    public string? TraceId { get; set; }
-    
-    public string? SpanId { get; set; }
-} 
+    public Exception? Exception { get; init; }
+
+    public IReadOnlyDictionary<string, object?>? Properties { get; init; }
+    public string? Scope { get; init; }
+    public string? TraceId { get; init; }
+    public string? SpanId { get; init; }
+}

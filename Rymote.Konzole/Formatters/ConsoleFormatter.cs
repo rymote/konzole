@@ -1,61 +1,55 @@
 using System.Text;
-using Rymote.Konzole.Configuration;
 using Rymote.Konzole.Models;
 
 namespace Rymote.Konzole.Formatters;
 
-public class ConsoleFormatter : FormatterBase
+public sealed class ConsoleFormatter : ILogFormatter
 {
-    private readonly ConsoleSinkOptions _consoleSinkOptions;
-    
-    public ConsoleFormatter(ConsoleSinkOptions options) : base(options)
+    private readonly bool _useEmojis;
+
+    public ConsoleFormatter(bool useEmojis = true)
     {
-        _consoleSinkOptions = options;
+        _useEmojis = useEmojis;
     }
-    
-    public override string Format(LogEntry entry)
+
+    public string Format(LogEntry entry, FormatterContext context)
     {
-        StringBuilder stringBuilder = new StringBuilder();
-        
-        if (_consoleSinkOptions.UseEmojis && Console.OutputEncoding.CodePage == 65001) // UTF-8
+        StringBuilder stringBuilder = new();
+
+        bool consoleSupportsUtf8 = Console.OutputEncoding.CodePage == 65001;
+        bool renderEmoji = _useEmojis && consoleSupportsUtf8;
+
+        if (renderEmoji)
         {
-            string emoji = LogIcon.GetIcon(entry.Level);
+            string emoji = entry.Tag.HasValue
+                ? LogIcon.GetIcon(entry.Tag.Value)
+                : LogIcon.GetIcon(entry.Level);
             stringBuilder.Append(emoji);
-            
-            int spacesToAdd = 2;
-            for (int i = 0; i < spacesToAdd; i++)
-            {
-                stringBuilder.Append(' ');
-            }
+            stringBuilder.Append("  ");
         }
         else
         {
-            stringBuilder.Append(LogIcon.GetFallbackIcon(entry.Level));
+            string fallback = entry.Tag.HasValue
+                ? LogIcon.GetFallbackIcon(entry.Tag.Value)
+                : LogIcon.GetFallbackIcon(entry.Level);
+            stringBuilder.Append(fallback);
             stringBuilder.Append(' ');
         }
-        
-        AppendTimestamp(stringBuilder, entry);
-        AppendCategory(stringBuilder, entry);
-        AppendEventId(stringBuilder, entry);
-        AppendScope(stringBuilder, entry);
-        
-        string message = entry.Message;
-        if (message.Length > _consoleSinkOptions.MaxMessageLength)
-        {
-            message = message.Substring(0, _consoleSinkOptions.MaxMessageLength - 3) + "...";
-        }
-        stringBuilder.Append(message);
-        
-        if (entry.Properties?.Count > 0)
+
+        FormatterHelpers.AppendTimestamp(stringBuilder, entry, context);
+        FormatterHelpers.AppendCategory(stringBuilder, entry, context);
+        FormatterHelpers.AppendEventId(stringBuilder, entry, context);
+        FormatterHelpers.AppendScope(stringBuilder, entry, context);
+
+        stringBuilder.Append(FormatterHelpers.TruncateMessage(entry.Message, context.MaxMessageLength));
+
+        if (entry.Properties is { Count: > 0 })
         {
             stringBuilder.Append(" (");
             bool isFirst = true;
             foreach (KeyValuePair<string, object?> property in entry.Properties)
             {
-                if (!isFirst)
-                {
-                    stringBuilder.Append(", ");
-                }
+                if (!isFirst) stringBuilder.Append(", ");
                 stringBuilder.Append(property.Key);
                 stringBuilder.Append(": ");
                 stringBuilder.Append(property.Value?.ToString() ?? "null");
@@ -63,9 +57,9 @@ public class ConsoleFormatter : FormatterBase
             }
             stringBuilder.Append(')');
         }
-        
-        AppendException(stringBuilder, entry);
-        
+
+        FormatterHelpers.AppendException(stringBuilder, entry, context);
+
         return stringBuilder.ToString();
     }
-} 
+}

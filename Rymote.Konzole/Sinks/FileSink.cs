@@ -1,148 +1,106 @@
-using System.Collections.Concurrent;
 using Rymote.Konzole.Configuration;
 using Rymote.Konzole.Formatters;
 using Rymote.Konzole.Models;
+using Rymote.Konzole.Sinks.Files;
 
 namespace Rymote.Konzole.Sinks;
 
-public class FileSink : SinkBase<FileSinkOptions>
+public sealed class FileSink : SinkBase<FileSinkOptions>
 {
-    private readonly ConcurrentQueue<string> _messageQueue = new();
-    private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
-    private readonly Timer _flushTimer;
+    private readonly IFileRollingStrategy _rollingStrategy;
+    private readonly Func<DateTimeOffset> _clock;
+    private readonly string _basePath;
+
     private StreamWriter? _streamWriter;
-    private string _currentFilePath;
+    private string _activeFilePath = string.Empty;
     private long _currentFileSize;
-    private int _fileIndex;
-    
+    private DateTimeOffset _lastFlush = DateTimeOffset.MinValue;
+
+    public FileSink(FileSinkOptions options) : this(options, () => DateTimeOffset.UtcNow) { }
+
+    public FileSink(FileSinkOptions options, Func<DateTimeOffset> clock) : base(options)
+    {
+        _clock = clock;
+        _basePath = ResolveBasePath(options);
+        EnsureDirectoryExists(_basePath);
+        _rollingStrategy = BuildStrategy(options);
+        OpenActiveWriter(_clock());
+    }
+
     public override string Name => "File";
-    
-    public FileSink(FileSinkOptions options) : base(options)
+
+    protected override ILogFormatter CreateDefaultFormatter() => new JsonFormatter();
+
+    protected override async ValueTask WriteBatchAsync(IReadOnlyList<LogEntry> batch, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(Options.FilePath))
+        foreach (LogEntry entry in batch)
         {
-            Options.FilePath = Path.Combine(Directory.GetCurrentDirectory(), "logs", "konzole.log");
-        }
-        
-        string? directoryPath = Path.GetDirectoryName(Options.FilePath);
-        if (!string.IsNullOrEmpty(directoryPath) && !Directory.Exists(directoryPath))
-        {
-            Directory.CreateDirectory(directoryPath);
-        }
-        
-        _currentFilePath = GetCurrentFilePath();
-        InitializeWriter();
-        
-        _flushTimer = new Timer(_ => FlushAsync().Wait(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
-    }
-    
-    public override async Task WriteAsync(LogEntry entry)
-    {
-        if (!ShouldLog(entry))
-            return;
-            
-        string formattedMessage = Formatter.Format(entry);
-        _messageQueue.Enqueue(formattedMessage);
-        
-        if (_messageQueue.Count >= 10)
-        {
-            await FlushAsync();
-        }
-    }
-    
-    public override async Task FlushAsync()
-    {
-        await _semaphoreSlim.WaitAsync();
-        try
-        {
-            List<string> entries = new List<string>();
-            while (_messageQueue.TryDequeue(out string? entry))
+            string line = Formatter.Format(entry, FormatterContext);
+            int byteCount = System.Text.Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
+
+            DateTimeOffset now = _clock();
+            if (_rollingStrategy.ShouldRoll(_activeFilePath, _currentFileSize, byteCount, now))
             {
-                entries.Add(entry);
+                await CloseWriterAsync();
+                _rollingStrategy.Roll(_basePath, Options.MaxFiles, now);
+                OpenActiveWriter(now);
             }
-            
-            if (entries.Count == 0)
-                return;
-                
-            foreach (string entry in entries)
-            {
-                await WriteToFileAsync(entry);
-            }
-            
-            await _streamWriter!.FlushAsync();
+
+            await _streamWriter!.WriteLineAsync(line.AsMemory(), cancellationToken);
+            _currentFileSize += byteCount;
         }
-        finally
+
+        if (Options.FlushInterval == TimeSpan.Zero || _clock() - _lastFlush >= Options.FlushInterval)
         {
-            _semaphoreSlim.Release();
+            await _streamWriter!.FlushAsync(cancellationToken);
+            _lastFlush = _clock();
         }
     }
-    
-    protected override ILogFormatter CreateDefaultFormatter()
+
+    public override async ValueTask FlushAsync(CancellationToken cancellationToken)
     {
-        return new JsonFormatter(Options);
-    }
-    
-    private async Task WriteToFileAsync(string entry)
-    {
-        int byteCount = System.Text.Encoding.UTF8.GetByteCount(entry) + Environment.NewLine.Length;
-        
-        if (_currentFileSize + byteCount > Options.MaxFileSize)
-        {
-            await RotateFileAsync();
-        }
-        
-        await _streamWriter!.WriteLineAsync(entry);
-        _currentFileSize += byteCount;
-    }
-    
-    private async Task RotateFileAsync()
-    {
+        await base.FlushAsync(cancellationToken);
         if (_streamWriter != null)
-        {
-            await _streamWriter.DisposeAsync();
-        }
-        
-        _fileIndex++;
-        if (_fileIndex >= Options.MaxFiles)
-        {
-            _fileIndex = 0;
-        }
-        
-        _currentFilePath = GetCurrentFilePath();
-        InitializeWriter();
-        _currentFileSize = 0;
+            await _streamWriter.FlushAsync(cancellationToken);
     }
-    
-    private string GetCurrentFilePath()
+
+    protected override async ValueTask DisposeResourcesAsync()
     {
-        if (_fileIndex == 0)
-            return Options.FilePath!;
-            
-        string directoryPath = Path.GetDirectoryName(Options.FilePath)!;
-        string fileName = Path.GetFileNameWithoutExtension(Options.FilePath);
-        string fileExtension = Path.GetExtension(Options.FilePath);
-        
-        return Path.Combine(directoryPath, $"{fileName}.{_fileIndex}{fileExtension}");
+        await CloseWriterAsync();
     }
-    
-    private void InitializeWriter()
+
+    private void OpenActiveWriter(DateTimeOffset now)
     {
-        _streamWriter = new StreamWriter(_currentFilePath, append: true)
-        {
-            AutoFlush = false
-        };
-        
-        if (File.Exists(_currentFilePath))
-        {
-            _currentFileSize = new FileInfo(_currentFilePath).Length;
-        }
+        _activeFilePath = _rollingStrategy.ResolveActivePath(_basePath, now);
+        EnsureDirectoryExists(_activeFilePath);
+        _streamWriter = new StreamWriter(_activeFilePath, append: true, System.Text.Encoding.UTF8) { AutoFlush = false };
+        _currentFileSize = File.Exists(_activeFilePath) ? new FileInfo(_activeFilePath).Length : 0;
     }
-    
-    public override void Dispose()
+
+    private async Task CloseWriterAsync()
     {
-        _flushTimer?.Dispose();
-        base.Dispose();
-        _streamWriter?.Dispose();
-        _semaphoreSlim?.Dispose();
+        if (_streamWriter == null) return;
+        await _streamWriter.FlushAsync();
+        await _streamWriter.DisposeAsync();
+        _streamWriter = null;
     }
-} 
+
+    private static string ResolveBasePath(FileSinkOptions options) =>
+        string.IsNullOrEmpty(options.FilePath)
+            ? Path.Combine(AppContext.BaseDirectory, "logs", "konzole.log")
+            : options.FilePath;
+
+    private static void EnsureDirectoryExists(string filePath)
+    {
+        string? directoryPath = Path.GetDirectoryName(filePath);
+        if (!string.IsNullOrEmpty(directoryPath) && !Directory.Exists(directoryPath))
+            Directory.CreateDirectory(directoryPath);
+    }
+
+    private static IFileRollingStrategy BuildStrategy(FileSinkOptions options) => options.RollingPolicy switch
+    {
+        FileRollingPolicy.DateOnly     => new DateOnlyRollingStrategy(),
+        FileRollingPolicy.DateThenSize => new DateThenSizeRollingStrategy { MaxFileSize = options.MaxFileSize },
+        _                              => new SizeOnlyRollingStrategy    { MaxFileSize = options.MaxFileSize }
+    };
+}

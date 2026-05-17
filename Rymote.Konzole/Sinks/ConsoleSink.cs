@@ -1,113 +1,69 @@
+using Microsoft.Extensions.Logging;
 using Rymote.Konzole.Configuration;
 using Rymote.Konzole.Formatters;
 using Rymote.Konzole.Models;
 
 namespace Rymote.Konzole.Sinks;
 
-public class ConsoleSink : SinkBase<ConsoleSinkOptions>
+public sealed class ConsoleSink : SinkBase<ConsoleSinkOptions>
 {
-    private readonly object _lockObject = new();
-    
+    private readonly Lock _consoleGate = new();
+
+    public ConsoleSink(ConsoleSinkOptions options) : base(options) { }
+
     public override string Name => "Console";
-    
-    public ConsoleSink(ConsoleSinkOptions options) : base(options)
+
+    protected override ILogFormatter CreateDefaultFormatter() => new ConsoleFormatter(Options.UseEmojis);
+
+    protected override ValueTask WriteBatchAsync(IReadOnlyList<LogEntry> batch, CancellationToken cancellationToken)
     {
-        if (!options.UseEmojis) return;
-        
-        try
+        foreach (LogEntry entry in batch)
         {
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
-        }
-        catch
-        {
-            // Fallback if encoding change fails
-        }
-    }
-    
-    public override async Task WriteAsync(LogEntry entry)
-    {
-        if (!ShouldLog(entry))
-            return;
-            
-        await Task.Run(() =>
-        {
-            lock (_lockObject)
+            string rendered = Formatter.Format(entry, FormatterContext);
+            TextWriter destination = entry.Level >= LogLevel.Error ? Console.Error : Console.Out;
+
+            lock (_consoleGate)
             {
-                ConsoleColor originalForegroundColor = Console.ForegroundColor;
-                ConsoleColor originalBackgroundColor = Console.BackgroundColor;
-                
+                if (!Options.UseColors)
+                {
+                    destination.WriteLine(rendered);
+                    continue;
+                }
+
+                ConsoleColor originalForeground = Console.ForegroundColor;
+                ConsoleColor originalBackground = Console.BackgroundColor;
                 try
                 {
-                    if (Options.UseColors)
-                    {
-                        SetConsoleColor(entry.Level);
-                    }
-                    
-                    string formattedMessage = Formatter.Format(entry);
-                    
-                    if (entry.Level is KonzoleLogLevel.Error or KonzoleLogLevel.Fatal)
-                        Console.Error.WriteLine(formattedMessage);
-                    else
-                        Console.WriteLine(formattedMessage);
+                    ApplyColor(entry);
+                    destination.WriteLine(rendered);
                 }
                 finally
                 {
-                    Console.ForegroundColor = originalForegroundColor;
-                    Console.BackgroundColor = originalBackgroundColor;
+                    Console.ForegroundColor = originalForeground;
+                    Console.BackgroundColor = originalBackground;
                 }
             }
-        });
+        }
+
+        return ValueTask.CompletedTask;
     }
-    
-    protected override ILogFormatter CreateDefaultFormatter()
+
+    private void ApplyColor(LogEntry entry)
     {
-        return new ConsoleFormatter(Options);
-    }
-    
-    private void SetConsoleColor(KonzoleLogLevel level)
-    {
-        switch (level)
+        if (entry.Tag.HasValue && Options.TagColors.TryGetValue(entry.Tag.Value, out ConsoleColor tagColor))
         {
-            case KonzoleLogLevel.Trace:
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                break;
-            case KonzoleLogLevel.Debug:
-                Console.ForegroundColor = ConsoleColor.Gray;
-                break;
-            case KonzoleLogLevel.Information:
-                Console.ForegroundColor = ConsoleColor.Cyan;
-                break;
-            case KonzoleLogLevel.Success:
-                Console.ForegroundColor = ConsoleColor.Green;
-                break;
-            case KonzoleLogLevel.Warning:
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                break;
-            case KonzoleLogLevel.Error:
-                Console.ForegroundColor = ConsoleColor.Red;
-                break;
-            case KonzoleLogLevel.Fatal:
-                Console.ForegroundColor = ConsoleColor.White;
-                Console.BackgroundColor = ConsoleColor.DarkRed;
-                break;
-            case KonzoleLogLevel.Pending:
-                Console.ForegroundColor = ConsoleColor.Blue;
-                break;
-            case KonzoleLogLevel.Complete:
-                Console.ForegroundColor = ConsoleColor.DarkGreen;
-                break;
-            case KonzoleLogLevel.Note:
-                Console.ForegroundColor = ConsoleColor.Magenta;
-                break;
-            case KonzoleLogLevel.Start:
-                Console.ForegroundColor = ConsoleColor.DarkCyan;
-                break;
-            case KonzoleLogLevel.Pause:
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                break;
-            case KonzoleLogLevel.Watch:
-                Console.ForegroundColor = ConsoleColor.DarkMagenta;
-                break;
+            Console.ForegroundColor = tagColor;
+            return;
+        }
+
+        if (Options.LevelColors.TryGetValue(entry.Level, out ConsoleColor levelColor))
+        {
+            Console.ForegroundColor = levelColor;
+        }
+
+        if (entry.Level == LogLevel.Critical)
+        {
+            Console.BackgroundColor = Options.CriticalBackgroundColor;
         }
     }
-} 
+}
