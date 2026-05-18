@@ -1,8 +1,36 @@
-# Rymote.Konzole
+<div align="center">
+    <a href="https://github.com/rymote/konzole"><img src="https://github.com/rymote/konzole/blob/master/.github/rymote-konzole-cover.png" alt="rymote/konzole" /></a>
+</div>
+<br />
 
-Structured logging provider for `Microsoft.Extensions.Logging` with rich console output and pluggable sinks. Built on `System.Threading.Channels`: every sink owns a bounded background queue, so a slow Discord webhook never blocks a fast console write — or your application.
+<div align="center">
+  Rymote.Konzole - Structured logging provider for .NET with rich console output and pluggable sinks
+</div>
 
-## Install
+<div align="center">
+  <sub>
+    Brought to you by
+    <a href="https://github.com/jovanivanovic">@jovanivanovic</a>,
+    <a href="https://github.com/rymote">@rymote</a>
+  </sub>
+</div>
+
+## Overview
+
+Rymote.Konzole is a structured logging provider for `Microsoft.Extensions.Logging` with rich console output and pluggable sinks. Built on `System.Threading.Channels`: every sink owns a bounded background queue, so a slow Discord webhook never blocks a fast console write — or your application.
+
+## Features
+
+- **Drop-in `Microsoft.Extensions.Logging` provider** — registers via `builder.Logging.AddKonzole(...)` and integrates with the standard `ILogger<T>` surface.
+- **Bounded per-sink channels** — every sink runs its own `System.Threading.Channels` background worker with a configurable capacity and a DropOldest overflow policy.
+- **Rich console output** — UTF-8 emoji icons (with bracket fallback), per-level colors, and `stderr` routing for `Error`/`Critical`.
+- **Built-in sinks** — console, file (size/date/date+size rolling), remote HTTP (batched), Discord webhook, Slack webhook.
+- **Custom-level helpers** — `LogStart`, `LogPending`, `LogSuccess`, `LogComplete`, `LogNote`, `LogPause`, `LogWatch`, `LogFatal` ride on top of standard MEL levels via a `KonzoleTag` scope.
+- **Pluggable formatters and sinks** — implement `ILogFormatter` or extend `SinkBase<TOptions>` to ship your own.
+- **HTTP transport hardening** — `IHttpClientFactory`-backed sinks with bounded retry, exponential backoff, and `Retry-After` handling for 429s.
+- **Diagnostic event surface** — `KonzoleDiagnostics.SinkError` surfaces sink failures to your metrics pipeline; falls back to a rate-limited `stderr` message when nobody is listening.
+
+## Installation
 
 ```bash
 dotnet add package Rymote.Konzole
@@ -150,6 +178,13 @@ KonzoleDiagnostics.SinkError += (sender, eventArgs) =>
 };
 ```
 
+## Support the project
+
+If Konzole has helped you ship faster, please consider supporting ongoing development:
+
+- [Patreon](https://www.patreon.com/rymote)
+- [Open Collective](https://opencollective.com/rymote)
+
 ## License
 
-MIT
+This project is licensed under the BSD 3-Clause License — see [LICENSE.md](./LICENSE.md) for details.
