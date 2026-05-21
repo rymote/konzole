@@ -26,4 +26,15 @@ public class SlackFormatterTests
         Assert.Contains("*Error*", rendered);
         Assert.Contains("boom", rendered);
     }
+
+    [Fact]
+    public void Format_StripsStyleMarkup_FromMessage()
+    {
+        SlackFormatter formatter = new();
+        LogEntry entry = new() { Level = LogLevel.Error, Message = "[bold]boom[/]" };
+        string rendered = formatter.Format(entry, PlainContext);
+        Assert.DoesNotContain("[bold]", rendered);
+        Assert.DoesNotContain("[/]", rendered);
+        Assert.Contains("boom", rendered);
+    }
 }

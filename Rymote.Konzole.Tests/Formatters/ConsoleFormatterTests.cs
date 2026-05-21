@@ -48,7 +48,7 @@ public class ConsoleFormatterTests
 
         string rendered = formatter.Format(entry, context);
 
-        Assert.EndsWith("abcdefg...", rendered);
+        Assert.Contains("abcdefg...", rendered);
     }
 
     [Fact]
@@ -65,6 +65,7 @@ public class ConsoleFormatterTests
 
         string rendered = formatter.Format(entry, PlainContext);
 
-        Assert.Contains("(userId: 42, action: login)", rendered);
+        Assert.Contains("[property-key]userId[/]: [property-value]42[/]", rendered);
+        Assert.Contains("[property-key]action[/]: [property-value]login[/]", rendered);
     }
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using Rymote.Konzole.Models;
+using Rymote.Konzole.Styling;
 
 namespace Rymote.Konzole.Formatters;
 
@@ -63,6 +64,8 @@ internal static class FormatterHelpers
 
     public static string TruncateMessage(string message, int maxLength) =>
         message.Length <= maxLength ? message : message.Substring(0, maxLength - 3) + "...";
+
+    public static string StripStyles(string text) => StyleMarkup.Strip(text);
 
     private static string TruncateCategory(string category)
     {

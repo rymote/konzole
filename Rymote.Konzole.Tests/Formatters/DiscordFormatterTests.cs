@@ -37,4 +37,15 @@ public class DiscordFormatterTests
 
         Assert.StartsWith("✅", rendered);
     }
+
+    [Fact]
+    public void Format_StripsStyleMarkup_FromMessage()
+    {
+        DiscordFormatter formatter = new();
+        LogEntry entry = new() { Level = LogLevel.Warning, Message = "[red]careful[/]" };
+        string rendered = formatter.Format(entry, PlainContext);
+        Assert.DoesNotContain("[red]", rendered);
+        Assert.DoesNotContain("[/]", rendered);
+        Assert.Contains("careful", rendered);
+    }
 }

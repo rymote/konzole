@@ -23,7 +23,8 @@ Rymote.Konzole is a structured logging provider for `Microsoft.Extensions.Loggin
 
 - **Drop-in `Microsoft.Extensions.Logging` provider** — registers via `builder.Logging.AddKonzole(...)` and integrates with the standard `ILogger<T>` surface.
 - **Bounded per-sink channels** — every sink runs its own `System.Threading.Channels` background worker with a configurable capacity and a DropOldest overflow policy.
-- **Rich console output** — UTF-8 emoji icons (with bracket fallback), per-level colors, and `stderr` routing for `Error`/`Critical`.
+- **Rich multi-color console output** — UTF-8 emoji icons, bracketed level/tag labels (`[INFO]`, `[ERROR]`, `[SUCCESS]`), per-segment coloring (timestamp dim, category cyan, message in level color), and `stderr` routing for `Error`/`Critical`. Independent toggles for the emoji icon and the bracket label.
+- **Inline style markup** — embed `[red]`, `[bold]`, `[bg:yellow black]`, `[#ff8800]`, `[color:208]`, etc. directly in log messages. `ConsoleSink` emits ANSI escape sequences; non-console sinks (file/HTTP/Discord/Slack) strip the markup cleanly.
 - **Built-in sinks** — console, file (size/date/date+size rolling), remote HTTP (batched), Discord webhook, Slack webhook.
 - **Custom-level helpers** — `LogStart`, `LogPending`, `LogSuccess`, `LogComplete`, `LogNote`, `LogPause`, `LogWatch`, `LogFatal` ride on top of standard MEL levels via a `KonzoleTag` scope.
 - **Pluggable formatters and sinks** — implement `ILogFormatter` or extend `SinkBase<TOptions>` to ship your own.
@@ -114,6 +115,72 @@ Mapping:
 | `LogWatch`   | `Debug`       | `KonzoleTag.Watch`   |
 | `LogFatal`   | `Critical`    | _(none — Critical already is fatal)_ |
 
+## Inline style syntax
+
+Embed style markup directly in log messages using a BBCode-style grammar. The `ConsoleSink` converts the markup to ANSI escape sequences; every other sink (file, remote HTTP, Discord, Slack) strips the markup so non-terminal consumers receive plain text.
+
+```csharp
+logger.LogInformation("User [bold bright_cyan]{Email}[/] logged in from [yellow]{Ip}[/]", email, ip);
+logger.LogWarning("Rate limit [bold]87%[/] of quota for [magenta]POST /api/orders[/]");
+logger.LogError("Database call failed: [bold red]Connection refused[/] after [yellow]3 retries[/]");
+```
+
+### Grammar
+
+```
+[<style-list>]content[/]
+[[              → literal '['
+```
+
+`<style-list>` is one or more whitespace-separated tokens (case-insensitive):
+
+| Category | Tokens |
+|----------|--------|
+| Named foreground (16) | `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `bright_black`, …, `bright_white` |
+| Named background | `bg:<any foreground token>` (e.g. `bg:yellow`, `bg:bright_red`) |
+| 256-color palette | `color:N` (foreground, N=0-255), `bg:color:N` (background) |
+| Truecolor hex | `#rrggbb` (foreground), `bg:#rrggbb` (background) |
+| Text decoration | `bold`, `italic`, `underline`, `dim`, `reverse` |
+
+Combine freely in a single tag: `[bold bright_red bg:black]critical[/]`, `[italic #7c3aed underline]heads up[/]`.
+
+### Open / close / leniency
+
+- `[/]` closes the most recently opened tag (LIFO).
+- Tags compose: foreground/background of the inner layer override the outer; decoration flags OR together.
+- Any `[xxx]` whose body doesn't parse as a valid style list passes through as literal text (`[Login]`, `[2026-05-21]`, `[App.Service]` render unchanged).
+- `[[` escapes a literal `[` for the rare case you need `[red]` rendered as text.
+
+### Public API
+
+```csharp
+using Rymote.Konzole.Styling;
+
+string ansi    = StyleMarkup.ToAnsi("[red]error[/]");     // for direct terminal output
+string stripped = StyleMarkup.Strip("[red]error[/]");      // for plain-text targets — returns "error"
+```
+
+## ConsoleSink output controls
+
+The `ConsoleSink` line layout is composed of named segments — icon, level label, timestamp, category, scope, message, properties, exception — each with its own default style. Override any segment via `ConsoleSinkOptions.SegmentStyles`, or toggle the leading elements:
+
+```csharp
+konzole.AddConsoleSink(options =>
+{
+    options.UseColors = true;          // master color toggle
+    options.UseEmojis = true;          // emoji icon when terminal supports UTF-8
+    options.ShowIcon = true;           // entire icon segment (emoji + bracket fallback)
+    options.ShowLevelLabel = true;     // bracketed [INFO]/[ERROR]/[SUCCESS] label
+
+    options.SegmentStyles = new Dictionary<ConsoleSegment, AnsiStyle>
+    {
+        [ConsoleSegment.Timestamp] = new() { Foreground = AnsiColor.Named(AnsiNamedColor.Yellow) }
+    };
+});
+```
+
+Default segment styles are tuned for a dark terminal — dim timestamps, cyan category, bold-red level labels for errors, bright-white property values over dim keys, and so on. Per-level emphasis is keyed off `ConsoleSegment.Message`, `MessageWarning`, and `MessageError` so warnings and errors stand out without overriding routine messages.
+
 ## Writing a custom sink
 
 ```csharp
@@ -157,6 +224,13 @@ All sinks inherit from `SinkOptionsBase`:
 - `MaxQueueSize` (`10_000`) — bounded channel capacity; DropOldest on overflow
 - `ShutdownTimeout` (`5s`) — `DisposeAsync` drain bound
 - `Formatter` — override the default formatter
+
+`ConsoleSink` adds:
+
+- `UseColors` (`true`), `UseEmojis` (`true`)
+- `ShowIcon` (`true`), `ShowLevelLabel` (`true`)
+- `LevelColors` / `TagColors` / `CriticalBackgroundColor` — the dynamic per-entry color picked up by `Icon` and `LevelLabel` segments
+- `SegmentStyles` — full per-segment style overrides, merged on top of the defaults
 
 HTTP sinks (`RemoteSink`, `DiscordSink`, `SlackSink`) add:
 

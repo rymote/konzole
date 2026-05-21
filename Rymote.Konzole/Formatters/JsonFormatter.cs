@@ -32,11 +32,13 @@ public sealed class JsonFormatter : ILogFormatter
             ["timestamp"] = context.ShowTimestamp ? entry.Timestamp.ToString(context.TimestampFormat) : null,
             ["level"] = entry.Level.ToString(),
             ["tag"] = entry.Tag?.ToString(),
-            ["message"] = entry.Message,
+            ["message"] = FormatterHelpers.StripStyles(entry.Message),
             ["category"] = context.ShowCategory ? entry.Category : null,
             ["eventId"] = context.ShowEventId && entry.EventId.Id != 0 ? entry.EventId.Id : (int?)null,
             ["eventName"] = context.ShowEventId ? entry.EventId.Name : null,
-            ["exception"] = context.ShowException ? entry.Exception : null,
+            ["exception"] = context.ShowException && entry.Exception != null
+                ? BuildStrippedExceptionObject(entry.Exception)
+                : null,
             ["properties"] = entry.Properties,
             ["scope"] = context.ShowScope ? entry.Scope : null,
             ["traceId"] = entry.TraceId,
@@ -44,5 +46,16 @@ public sealed class JsonFormatter : ILogFormatter
         };
 
         return JsonSerializer.Serialize(document, _jsonSerializerOptions);
+    }
+
+    private static object? BuildStrippedExceptionObject(Exception original)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["type"] = original.GetType().FullName,
+            ["message"] = FormatterHelpers.StripStyles(original.Message),
+            ["stackTrace"] = original.StackTrace,
+            ["innerException"] = original.InnerException == null ? null : BuildStrippedExceptionObject(original.InnerException)
+        };
     }
 }

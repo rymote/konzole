@@ -72,4 +72,25 @@ public class JsonFormatterTests
         Assert.StartsWith("<unserializable:", props.GetProperty("MethodInfo").GetString());
         Assert.StartsWith("<unserializable:", props.GetProperty("MetadataType").GetString());
     }
+
+    [Fact]
+    public void Format_StripsStyleMarkup_FromMessage()
+    {
+        JsonFormatter formatter = new();
+        LogEntry entry = new() { Level = LogLevel.Information, Message = "[red]warn[/]" };
+        string json = formatter.Format(entry, DefaultContext);
+        using JsonDocument document = JsonDocument.Parse(json);
+        Assert.Equal("warn", document.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public void Format_StripsStyleMarkup_FromExceptionMessage()
+    {
+        JsonFormatter formatter = new();
+        InvalidOperationException exception = new("[bold]boom[/]");
+        LogEntry entry = new() { Level = LogLevel.Error, Message = "failed", Exception = exception };
+        string json = formatter.Format(entry, DefaultContext);
+        using JsonDocument document = JsonDocument.Parse(json);
+        Assert.Equal("boom", document.RootElement.GetProperty("exception").GetProperty("message").GetString());
+    }
 }

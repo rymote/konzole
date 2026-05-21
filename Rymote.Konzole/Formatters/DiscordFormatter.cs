@@ -33,7 +33,8 @@ public sealed class DiscordFormatter : ILogFormatter
         }
 
         stringBuilder.AppendLine();
-        stringBuilder.Append(FormatterHelpers.TruncateMessage(entry.Message, context.MaxMessageLength));
+        string messagePlain = FormatterHelpers.StripStyles(entry.Message);
+        stringBuilder.Append(FormatterHelpers.TruncateMessage(messagePlain, context.MaxMessageLength));
 
         return stringBuilder.ToString();
     }
