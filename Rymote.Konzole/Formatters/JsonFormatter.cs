@@ -19,7 +19,8 @@ public sealed class JsonFormatter : ILogFormatter
             Converters =
             {
                 new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
-                new ExceptionJsonConverter()
+                new ExceptionJsonConverter(),
+                new SafeObjectJsonConverter()
             }
         };
     }

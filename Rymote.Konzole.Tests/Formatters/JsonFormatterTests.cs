@@ -45,4 +45,31 @@ public class JsonFormatterTests
         Assert.Equal("outer-failure", exceptionElement.GetProperty("message").GetString());
         Assert.Equal("inner-cause", exceptionElement.GetProperty("innerException").GetProperty("message").GetString());
     }
+
+    [Fact]
+    public void Format_ReflectionTypedProperties_AreSerialisedAsPlaceholder_NotThrow()
+    {
+        JsonFormatter formatter = new();
+        System.Reflection.MethodInfo? handlerMethod = typeof(JsonFormatterTests).GetMethod(
+            nameof(Format_ReflectionTypedProperties_AreSerialisedAsPlaceholder_NotThrow));
+        LogEntry entry = new()
+        {
+            Level = LogLevel.Information,
+            Message = "endpoint matched",
+            Properties = new Dictionary<string, object?>
+            {
+                ["EndpointName"] = "POST /auth/sign-up",
+                ["MethodInfo"] = handlerMethod,
+                ["MetadataType"] = typeof(JsonFormatterTests),
+            }
+        };
+
+        string json = formatter.Format(entry, DefaultContext);
+
+        using JsonDocument document = JsonDocument.Parse(json);
+        JsonElement props = document.RootElement.GetProperty("properties");
+        Assert.Equal("POST /auth/sign-up", props.GetProperty("EndpointName").GetString());
+        Assert.StartsWith("<unserializable:", props.GetProperty("MethodInfo").GetString());
+        Assert.StartsWith("<unserializable:", props.GetProperty("MetadataType").GetString());
+    }
 }
